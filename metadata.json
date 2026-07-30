@@ -1,0 +1,6 @@
+{
+  "name": "FarmLens AI",
+  "description": "AI-powered livestock assistant for smarter farming.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
