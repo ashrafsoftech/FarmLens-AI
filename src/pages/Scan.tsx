@@ -5,14 +5,13 @@
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Camera, Sparkles, CheckCircle2, ShieldAlert, Info, Tag, ArrowRight } from 'lucide-react';
+import { Camera, Sparkles, CheckCircle2, ShieldAlert, Tag, ArrowRight, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { UploadArea } from '../components/ui/UploadArea';
 import { Loader } from '../components/ui/Loader';
 import { useLanguage } from '../context/LanguageContext';
-import { AnimalType, ScanReport } from '../types';
-import { SAMPLE_SCANS } from '../data/mockData';
+import { AnimalType } from '../types';
 
 export const Scan: React.FC = () => {
   const { t, language } = useLanguage();
@@ -28,6 +27,7 @@ export const Scan: React.FC = () => {
   );
   const [animalNameHint, setAnimalNameHint] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const animalCategories: { type: AnimalType; label: string; emoji: string }[] = [
     { type: 'chicken', label: 'Chicken', emoji: '🐔' },
@@ -39,93 +39,80 @@ export const Scan: React.FC = () => {
     { type: 'duck', label: 'Duck', emoji: '🦆' },
   ];
 
+  const imageToBase64DataUrl = async (file: File | null, url: string | null): Promise<string> => {
+    if (file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read image file.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (url) {
+      if (url.startsWith('data:image/')) {
+        return url;
+      }
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to load image preview (${res.status})`);
+      }
+      const blob = await res.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to convert image blob to base64.'));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    throw new Error('No image file or preview available for scanning.');
+  };
+
   const handleImageSelected = (file: File, url: string) => {
     setSelectedFile(file);
     setPreviewUrl(url);
+    setScanError(null);
   };
 
   const handleClearImage = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
+    setScanError(null);
   };
 
   const handleAnalyze = async () => {
     if (!previewUrl) return;
 
     setIsAnalyzing(true);
+    setScanError(null);
 
     try {
+      // Ensure real base64 image data is created and sent to backend
+      const base64ImageData = await imageToBase64DataUrl(selectedFile, previewUrl);
+
       const response = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image: previewUrl,
+          image: base64ImageData,
           animalType: selectedAnimalType,
           animalName: animalNameHint,
           language,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
-
       const data = await response.json();
-      if (data.success && data.scan) {
-        sessionStorage.setItem('latest_scan_report', JSON.stringify(data.scan));
-        navigate('/results');
-        return;
-      }
-      throw new Error('Invalid response structure');
-    } catch (err) {
-      console.warn('API scan call failed or offline, using fallback report:', err);
-      const fallbackReport: ScanReport = {
-        id: `scan-${Date.now().toString().slice(-4)}`,
-        animalName: animalNameHint || `${selectedAnimalType.toUpperCase()} #${Math.floor(Math.random() * 90 + 10)}`,
-        imageUrl: previewUrl,
-        animalType: selectedAnimalType,
-        breed:
-          selectedAnimalType === 'chicken'
-            ? 'ShikaBrown Layer'
-            : selectedAnimalType === 'goat'
-            ? 'West African Dwarf Goat'
-            : selectedAnimalType === 'sheep'
-            ? 'Balami Sheep'
-            : selectedAnimalType === 'cow'
-            ? 'White Fulani (Bunaji)'
-            : selectedAnimalType === 'fish'
-            ? 'Nile Tilapia'
-            : selectedAnimalType === 'rabbit'
-            ? 'New Zealand White'
-            : 'Muscovy Duck',
-        breedConfidence: 88,
-        estimatedAge: '6-12 months',
-        symptoms: ['Slight dullness during grazing', 'Mild physical stress'],
-        possibleConditions: [
-          {
-            id: 'c-1',
-            condition: 'Environmental Stress / Nutritional Assessment',
-            confidence: 65,
-            explanation: 'Visual health observation indicates sub-optimal energy or minor climate stress.',
-          },
-        ],
-        riskLevel: 'medium',
-        vetReferralRecommended: true,
-        feedingAdvice: [
-          'Ensure continuous access to fresh clean water with mineral electrolytes.',
-          'Feed high quality dry fodder mixed with maize bran in shade.',
-        ],
-        careRecommendations: [
-          'Isolate from main herd for 24-48 hours to monitor temperature.',
-          'Maintain clean, elevated, well-ventilated housing free from dampness.',
-        ],
-        purchaseAdvice:
-          'Trader note: Check gums for anemia (pale color) and ensure clear posture before committing to market purchase.',
-        createdAt: new Date().toISOString(),
-      };
 
-      sessionStorage.setItem('latest_scan_report', JSON.stringify(fallbackReport));
+      if (!response.ok || !data.success || !data.scan) {
+        throw new Error(data.error || `Scan failed (HTTP ${response.status})`);
+      }
+
+      sessionStorage.setItem('latest_scan_report', JSON.stringify(data.scan));
       navigate('/results');
+    } catch (err: any) {
+      console.error('[FarmLens AI] API scan call failed:', err);
+      setScanError(err?.message || 'Failed to complete analysis with Gemma 4.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -148,6 +135,16 @@ export const Scan: React.FC = () => {
 
       {isAnalyzing && (
         <Loader fullScreen message="Analyzing photo with FarmLens AI... Checking breed traits, symptoms, and care guidelines." />
+      )}
+
+      {scanError && (
+        <div className="p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-sm text-rose-100">Scan Analysis Failed</h4>
+            <p className="text-xs text-rose-300">{scanError}</p>
+          </div>
+        </div>
       )}
 
       {/* Main Scan Form */}

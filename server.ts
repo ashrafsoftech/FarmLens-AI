@@ -3,16 +3,16 @@
  * Entry point for API routes (/scan, /chat, /history) and Vite frontend integration.
  */
 
+import dotenv from 'dotenv';
+// Load environment variables before initializing services
+dotenv.config();
+
 import express, { Request, Response } from 'express';
 import path from 'path';
-import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { gemmaService } from './server/services/gemmaService';
 import { historyStore } from './server/storage/historyStore';
 import { AnimalType, SupportedLanguage } from './src/types';
-
-// Load environment variables
-dotenv.config();
 
 async function startServer() {
   const app = express();
@@ -24,15 +24,21 @@ async function startServer() {
 
   /**
    * GET /api/health
-   * Endpoint to verify server & Gemini AI configuration status.
+   * Endpoint to verify server & Gemma AI configuration status.
    */
   const handleHealth = (req: Request, res: Response) => {
+    const isConfigured = !!(
+      process.env.GEMINI_API_KEY &&
+      process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY' &&
+      process.env.GEMINI_API_KEY !== 'unconfigured'
+    );
     res.json({
       status: 'ok',
       service: 'FarmLens AI Backend',
       version: '1.0.0',
-      geminiConfigured: !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY'),
-      model: 'gemini-3.6-flash',
+      aiProvider: 'Google Gemini API',
+      model: 'gemma-4-26b-a4b-it',
+      gemmaConfigured: isConfigured,
       timestamp: new Date().toISOString(),
     });
   };
@@ -41,7 +47,7 @@ async function startServer() {
 
   /**
    * POST /scan (alias: /api/scan)
-   * Analyzes an uploaded or base64 livestock image using Gemma AI (gemini-3.6-flash).
+   * Analyzes an uploaded or base64 livestock image using Gemma AI (gemma-4-26b-a4b-it).
    * Body parameters:
    *  - image (string): Base64 Data URL or raw base64 string (Required)
    *  - animalType (AnimalType): Optional species hint

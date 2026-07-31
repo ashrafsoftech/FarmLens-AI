@@ -61,7 +61,21 @@ All explanations must be framed as supportive decision triage for farmers and ex
       prompt += ` Please ensure all text fields (symptoms, explanations, feeding advice, care recommendations, purchase advice) are presented clearly for a speaker of ${this.getLanguageName(language)}.`;
     }
 
-    prompt += ` Return your analysis as a strict, valid JSON object following the required schema.`;
+    prompt += ` Return your analysis ONLY as a single raw valid JSON object (without markdown wrapping or extra commentary) with the following key structure:
+{
+  "animalType": "chicken" | "goat" | "sheep" | "cow" | "fish" | "rabbit" | "duck",
+  "breed": string,
+  "breedConfidence": number (0-100),
+  "estimatedAge": string,
+  "symptoms": string[],
+  "possibleConditions": [{"condition": string, "confidence": number, "explanation": string}],
+  "riskLevel": "low" | "medium" | "high",
+  "vetReferralRecommended": boolean,
+  "feedingAdvice": string[],
+  "careRecommendations": string[],
+  "purchaseAdvice": string,
+  "notes": string
+}`;
 
     return prompt;
   }

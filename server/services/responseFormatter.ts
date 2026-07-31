@@ -14,13 +14,15 @@ export class ResponseFormatter {
     
     let cleaned = rawText.trim();
 
-    // Remove markdown code blocks like ```json ... ``` or ``` ... ```
-    if (cleaned.startsWith('```')) {
-      cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
-      cleaned = cleaned.replace(/\s*```$/, '');
+    // Extract content inside ```json ... ``` or ``` ... ``` code blocks anywhere in output
+    const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      cleaned = codeBlockMatch[1].trim();
+    } else {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     }
 
-    return cleaned.trim();
+    return cleaned;
   }
 
   /**
@@ -35,21 +37,27 @@ export class ResponseFormatter {
     }
   ): ScanReport {
     const cleanedJson = this.cleanJsonString(rawOutput);
-    let parsed: any = {};
+    let parsed: any = null;
 
-    try {
-      parsed = JSON.parse(cleanedJson);
-    } catch (err) {
-      console.warn('Failed to parse Gemma output as strict JSON. Attempting regex extraction.', err);
-      // Attempt regex extract if model added trailing text
-      const jsonMatch = rawOutput.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]);
-        } catch (e) {
-          console.error('Regex JSON extraction failed as well', e);
+    if (cleanedJson) {
+      try {
+        parsed = JSON.parse(cleanedJson);
+      } catch (err) {
+        console.warn('[FarmLens AI] Failed to parse Gemma 4 output directly as JSON. Attempting regex extraction.');
+        const jsonMatch = rawOutput.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch (e) {
+            console.error('[FarmLens AI] Regex JSON extraction failed as well.');
+          }
         }
       }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Object.keys(parsed).length === 0) {
+      console.error('[FarmLens AI] Gemma 4 model response could not be parsed as valid JSON. Raw output:', rawOutput.slice(0, 500));
+      throw new Error('Gemma 4 model returned invalid response format that could not be parsed as JSON.');
     }
 
     const timestamp = new Date().toISOString();

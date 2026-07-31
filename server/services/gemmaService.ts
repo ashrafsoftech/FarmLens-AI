@@ -11,21 +11,20 @@ import { AnimalType, SupportedLanguage, ScanReport, ChatMessage } from '../../sr
 
 export class GemmaService {
   private ai: GoogleGenAI | null = null;
-  private readonly MODEL_NAME = 'gemini-3.6-flash';
+  private currentKeyUsed: string | undefined = undefined;
+  private readonly MODEL_NAME = 'gemma-4-26b-a4b-it';
 
   constructor() {
-    this.initClient();
+    // Empty constructor - defer client initialization until API request
   }
 
   /**
-   * Initializes the GoogleGenAI client lazily using process.env.GEMINI_API_KEY
+   * Initializes or returns the GoogleGenAI client lazily using process.env.GEMINI_API_KEY
    */
   private initClient(): GoogleGenAI {
-    if (!this.ai) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn('GEMINI_API_KEY environment variable is not set. Gemini API requests will fall back to rule-based analysis until configured.');
-      }
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!this.ai || this.currentKeyUsed !== apiKey) {
+      this.currentKeyUsed = apiKey;
       this.ai = new GoogleGenAI({
         apiKey: apiKey || 'unconfigured',
         httpOptions: {
@@ -49,6 +48,10 @@ export class GemmaService {
   }): Promise<ScanReport> {
     const { imageInput, animalType, animalName, language = 'en' } = params;
 
+    console.log('[FarmLens AI] Starting livestock scan');
+    console.log(`[FarmLens AI] Model: ${this.MODEL_NAME}`);
+    console.log('[FarmLens AI] Multimodal input: image + prompt');
+
     // 1. Process and validate image upload
     const processedImage: ProcessedImage = ImageProcessor.processImage(imageInput);
 
@@ -59,18 +62,14 @@ export class GemmaService {
     // 3. Check API key readiness
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'unconfigured') {
-      console.warn('GEMINI_API_KEY not configured or placeholder detected. Generating structured fallback report.');
-      return ResponseFormatter.formatScanReport('{}', {
-        animalType,
-        animalName,
-        imageUrl: processedImage.dataUrl,
-      });
+      console.error('[FarmLens AI] GEMINI_API_KEY not configured or placeholder detected.');
+      throw new Error('Gemma 4 model is unavailable: GEMINI_API_KEY is not configured on the server.');
     }
 
     try {
       const client = this.initClient();
 
-      // 4. Call Gemini API via @google/genai SDK
+      // 4. Call Gemma 4 API via @google/genai SDK
       const response = await client.models.generateContent({
         model: this.MODEL_NAME,
         contents: {
@@ -88,69 +87,22 @@ export class GemmaService {
         },
         config: {
           systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              animalType: { type: Type.STRING, description: 'Species e.g. goat, chicken, sheep, cow, fish, rabbit, duck' },
-              breed: { type: Type.STRING, description: 'Identified breed name e.g. West African Dwarf Goat' },
-              breedConfidence: { type: Type.INTEGER, description: 'Confidence score 0-100' },
-              estimatedAge: { type: Type.STRING, description: 'Age estimation e.g. 8-12 months' },
-              symptoms: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: 'Visible health symptoms or posture notes',
-              },
-              possibleConditions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    condition: { type: Type.STRING },
-                    confidence: { type: Type.INTEGER },
-                    explanation: { type: Type.STRING },
-                  },
-                  required: ['condition', 'confidence', 'explanation'],
-                },
-              },
-              riskLevel: { type: Type.STRING, description: 'low, medium, or high' },
-              vetReferralRecommended: { type: Type.BOOLEAN },
-              feedingAdvice: { type: Type.ARRAY, items: { type: Type.STRING } },
-              careRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
-              purchaseAdvice: { type: Type.STRING },
-              notes: { type: Type.STRING },
-            },
-            required: [
-              'animalType',
-              'breed',
-              'breedConfidence',
-              'estimatedAge',
-              'symptoms',
-              'possibleConditions',
-              'riskLevel',
-              'vetReferralRecommended',
-              'feedingAdvice',
-              'careRecommendations',
-              'purchaseAdvice',
-            ],
-          },
         },
       });
 
+      console.log('[FarmLens AI] Gemma 4 response received');
+      console.log(`[FarmLens AI] Model: ${this.MODEL_NAME}`);
+
       const responseText = response.text || '';
+      console.log('[FarmLens AI] Raw Gemma 4 text output:', responseText);
       return ResponseFormatter.formatScanReport(responseText, {
         animalType,
         animalName,
         imageUrl: processedImage.dataUrl,
       });
     } catch (error: any) {
-      console.error('Error in Gemma Service analyzeLivestockImage:', error?.message || error);
-      // Fallback format on network or API failure
-      return ResponseFormatter.formatScanReport('{}', {
-        animalType,
-        animalName,
-        imageUrl: processedImage.dataUrl,
-      });
+      console.error('[FarmLens AI] Error in Gemma Service analyzeLivestockImage:', error?.message || error);
+      throw error;
     }
   }
 
@@ -165,15 +117,13 @@ export class GemmaService {
   }): Promise<{ reply: string; timestamp: string; scanContextId?: string }> {
     const { message, scanContext, language = 'en' } = params;
 
+    console.log('[FarmLens AI] Starting chat generation');
+    console.log(`[FarmLens AI] Model: ${this.MODEL_NAME}`);
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'unconfigured') {
-      return {
-        reply: `Thank you for asking. (Offline/Pre-key mode): For ${
-          scanContext ? scanContext.breed : 'your livestock'
-        }, always ensure access to clean water, dry housing, proper vaccination boosters, and consult a local agricultural extension officer or veterinarian for any signs of physical distress.`,
-        timestamp: new Date().toISOString(),
-        scanContextId: scanContext?.id,
-      };
+      console.error('[FarmLens AI] GEMINI_API_KEY is not configured on the server.');
+      throw new Error('Gemma 4 model is unavailable: GEMINI_API_KEY is not configured on the server.');
     }
 
     try {
@@ -193,6 +143,9 @@ export class GemmaService {
         },
       });
 
+      console.log('[FarmLens AI] Gemma 4 chat reply received');
+      console.log(`[FarmLens AI] Model: ${this.MODEL_NAME}`);
+
       const replyText = response.text || 'I am FarmLens AI. How else can I assist with your livestock health or feeding?';
 
       return {
@@ -201,14 +154,8 @@ export class GemmaService {
         scanContextId: scanContext?.id,
       };
     } catch (error: any) {
-      console.error('Error in Gemma Service generateChatReply:', error?.message || error);
-      return {
-        reply: `I encountered a connection hiccup while processing your inquiry. Generally, keep your ${
-          scanContext ? scanContext.animalType : 'livestock'
-        } in dry shelter, provide clean water with electrolytes, and consult a vet if symptoms persist.`,
-        timestamp: new Date().toISOString(),
-        scanContextId: scanContext?.id,
-      };
+      console.error('[FarmLens AI] Error in Gemma Service generateChatReply:', error?.message || error);
+      throw error;
     }
   }
 }

@@ -43,18 +43,23 @@ export class ImageProcessor {
     let base64Data = '';
 
     if (typeof input === 'string') {
-      if (input.startsWith('data:')) {
-        dataUrl = input;
-        const matches = input.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
+      const trimmed = input.trim();
+      if (trimmed.startsWith('blob:')) {
+        throw new Error('Invalid image input: browser Blob URL received. Expected Base64 image data.');
+      }
+
+      if (trimmed.startsWith('data:')) {
+        dataUrl = trimmed;
+        const matches = trimmed.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
         if (matches && matches.length === 3) {
           mimeType = matches[1].toLowerCase();
-          base64Data = matches[2];
+          base64Data = matches[2].trim();
         } else {
           throw new Error('Invalid Data URL format. Expected "data:image/...;base64,..."');
         }
       } else {
         // Raw base64 string assumed as jpeg
-        base64Data = input.trim();
+        base64Data = trimmed;
         dataUrl = `data:${mimeType};base64,${base64Data}`;
       }
     } else if (typeof input === 'object') {
