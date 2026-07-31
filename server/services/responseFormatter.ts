@@ -70,23 +70,17 @@ export class ResponseFormatter {
       animalType = parsed.animalType.toLowerCase() as AnimalType;
     }
 
-    // Default breed names per animal type if model output is missing
-    const defaultBreeds: Record<AnimalType, string> = {
-      goat: 'West African Dwarf Goat',
-      chicken: 'ShikaBrown Layer',
-      sheep: 'Balami Sheep',
-      cow: 'White Fulani (Bunaji)',
-      fish: 'Nile Tilapia',
-      rabbit: 'New Zealand White',
-      duck: 'Muscovy Duck',
-    };
+    const breed = (parsed.breed && typeof parsed.breed === 'string' && parsed.breed.trim().length > 0)
+      ? parsed.breed.trim()
+      : 'Unspecified / Local Breed';
 
-    const breed = parsed.breed || defaultBreeds[animalType] || 'Local Breed';
-    const breedConfidence = typeof parsed.breedConfidence === 'number' && parsed.breedConfidence > 0
-      ? Math.min(100, Math.max(10, Math.round(parsed.breedConfidence)))
-      : 88;
+    const breedConfidence = typeof parsed.breedConfidence === 'number'
+      ? Math.min(100, Math.max(0, Math.round(parsed.breedConfidence)))
+      : 50;
 
-    const estimatedAge = parsed.estimatedAge || '6-12 months';
+    const estimatedAge = (parsed.estimatedAge && typeof parsed.estimatedAge === 'string' && parsed.estimatedAge.trim().length > 0)
+      ? parsed.estimatedAge.trim()
+      : 'Age range not specified';
 
     // Normalize risk level
     let riskLevel: RiskLevel = 'low';
@@ -94,10 +88,10 @@ export class ResponseFormatter {
       riskLevel = parsed.riskLevel.toLowerCase() as RiskLevel;
     }
 
-    // Normalize symptoms
-    const symptoms: string[] = Array.isArray(parsed.symptoms) && parsed.symptoms.length > 0
-      ? parsed.symptoms.map(String)
-      : ['Bright coat/feathers', 'Active posture', 'No acute visible distress'];
+    // Normalize symptoms - preserve empty array if model returned []
+    const symptoms: string[] = Array.isArray(parsed.symptoms)
+      ? parsed.symptoms.map(String).filter((s) => s.trim().length > 0)
+      : [];
 
     // Normalize possible conditions
     let possibleConditions: PossibleCondition[] = [];

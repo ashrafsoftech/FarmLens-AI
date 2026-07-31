@@ -25,7 +25,7 @@ import { SAMPLE_SCANS } from '../data/mockData';
 
 export const Results: React.FC = () => {
   const navigate = useNavigate();
-  const [report, setReport] = useState<ScanReport>(SAMPLE_SCANS[0]);
+  const [report, setReport] = useState<ScanReport | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [reminderModalOpen, setReminderModalOpen] = useState(false);
   const [reminderTitle, setReminderTitle] = useState('');
@@ -40,9 +40,16 @@ export const Results: React.FC = () => {
         setReport(JSON.parse(cached));
       } catch (e) {
         console.error('Failed to parse cached scan report', e);
+        navigate('/scan');
       }
+    } else {
+      navigate('/scan');
     }
-  }, []);
+  }, [navigate]);
+
+  if (!report) {
+    return null;
+  }
 
   const handleAskChat = (rep: ScanReport) => {
     // Store current scan ID in session storage as context for AI Chat

@@ -93,6 +93,17 @@ export class ImageProcessor {
       throw new Error(`Image size (${(estimatedSizeBytes / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum limit of 10 MB.`);
     }
 
+
+
+console.log('[FarmLens AI] Image processed successfully');
+console.log(`[FarmLens AI] MIME type: ${mimeType}`);
+console.log(
+  `[FarmLens AI] Image size: ${(estimatedSizeBytes / (1024 * 1024)).toFixed(2)} MB`
+);
+console.log(
+  `[FarmLens AI] Base64 length: ${base64Data.length}`
+);
+
     return {
       mimeType,
       base64Data,
