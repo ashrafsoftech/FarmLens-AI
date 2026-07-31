@@ -153,10 +153,19 @@ export class GemmaService {
         timestamp: new Date().toISOString(),
         scanContextId: scanContext?.id,
       };
-    } catch (error: any) {
-      console.error('[FarmLens AI] Error in Gemma Service generateChatReply:', error?.message || error);
-      throw error;
-    }
+      } catch (error: any) {
+  console.error('[FarmLens AI] Gemma request failed');
+  console.error('[FarmLens AI] Error name:', error?.name);
+  console.error('[FarmLens AI] Error message:', error?.message);
+  console.error('[FarmLens AI] Error cause:', error?.cause);
+  console.error('[FarmLens AI] Full error:', error);
+  throw error;
+}
+    // } 
+    // catch (error: any) {
+    //   console.error('[FarmLens AI] Error in Gemma Service generateChatReply:', error?.message || error);
+    //   throw error;
+    // }
   }
 }
 
